@@ -1,5 +1,7 @@
 """Tests for src/renal.py."""
-import sys, os
+import math
+import os
+import sys
 import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from renal import crcl_cockcroft_gault, renal_category, calculate_ibw
@@ -49,3 +51,19 @@ def test_invalid_sex_raises():
 def test_negative_crcl_category_raises():
     with pytest.raises(ValueError):
         renal_category(-5)
+
+
+@pytest.mark.parametrize("bad_val", [float("nan"), float("inf"), float("-inf"), True])
+def test_non_finite_and_bool_inputs_rejected(bad_val):
+    with pytest.raises(ValueError):
+        crcl_cockcroft_gault(age=65, actual_weight_kg=70, height_cm=175, sex="male", scr_mg_dl=bad_val)
+    with pytest.raises(ValueError):
+        calculate_ibw(height_cm=bad_val, sex="male")
+    with pytest.raises(ValueError):
+        renal_category(bad_val)
+
+
+def test_pediatric_age_rejected_outside_adult_scope():
+    with pytest.raises(ValueError, match="adult"):
+        crcl_cockcroft_gault(age=5, actual_weight_kg=20, height_cm=110, sex="male", scr_mg_dl=0.5)
+

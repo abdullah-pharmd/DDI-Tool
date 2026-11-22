@@ -1,8 +1,9 @@
-streamlit
-pandas
-numpy
-scikit-learn
-shap
-matplotlib
-pytest
-reportlab
+streamlit==1.64.0
+pandas==3.0.6
+numpy==2.5.3
+scikit-learn==1.9.1
+shap==0.54.1
+matplotlib==3.11.2
+pytest==9.1.1
+reportlab==5.1.0
+pypdf==6.19.0

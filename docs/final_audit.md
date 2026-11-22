@@ -1,71 +1,38 @@
-# Final Project Audit
+# Project Audit (Updated After November 2026 Reviewer Repair)
 
-## Clinical correctness
-- STATUS: Mostly strong. Every equation sourced to a specific page/paper
-  (`key_equation_sources.md`, `pk_reference_values.csv`)
-- OPEN GAP: gentamicin's Salazar-Corcoran equation for obese-patient CrCl not
-  yet sourced (Stage 10)
-- OPEN GAP: drug-specific IBW/adjusted-weight Vd corrections (gentamicin,
-  vancomycin, phenytoin) not yet implemented in `pk_engine.py` — code still uses
-  actual weight (Stage 18 flag)
+## Scope & Entry-Point Capabilities
+- **Educational Four-Drug Scope:** Covers adult pharmacokinetics and pairwise lookup for `Gentamicin`, `Vancomycin`, `Digoxin`, and `Phenytoin` (6 distinct pairs).
+- **Independent Flag Architecture:** `renal.py` (Cockcroft-Gault 1976 + FDA 2020 staging) and `ddi_engine.py` (6-row literature-indexed pair lookup) run independently and are displayed side by side by `dose_adjustment.py` (`assess_regimen` / `summarize`). **No CrCl < 50 mL/min escalation rule, alternative antibiotic selector, or automatic interval extension exists in this build.**
+- **Entry-Point Matrix:**
+  - *Single Patient Workstation (`app.py` Tab 1):* Runs adult Cockcroft-Gault renal staging, drug-specific PK (`gentamicin_pk`, `vancomycin_pk`, `digoxin_pk` + `digoxin_maintenance_dose`, `phenytoin_pk`), 6-pair DDI lookup, and `assess_regimen` summary. TDM is NOT live-connected (`tdm_status=None` -> `Not assessed`).
+  - *PDF Audit Export (`src/report_generator.py`):* Formats the exact single-patient outputs, structured flags, and verification metadata into a clearly labeled educational/research PDF.
+  - *Batch Cohort Screening (`app.py` Tab 2 / `src/batch_processing.py`):* Validates finite numeric fields, adult age (`18-120`), allowed hepatic strings (`Yes`/`No`/`Unknown`), duplicate drugs, and cross-row demographic consistency per `patient_id` before grouping. Runs renal category, DDI pair lookup, and `assess_regimen` summary ONLY; drug-specific PK and TDM are explicitly reported under `Not assessed`.
+  - *Standalone Helper Modules:* `src/tdm.py` (`interpret_tdm` requires finite values, explicit `measurement_type`, matching `unit`, and states scope limits; returns `indeterminate` otherwise) and `src/ddi_ml.py` (illustrative training-fit audit on the 6-row lookup; NOT predictive evidence).
 
-## Mathematical correctness
-- STATUS: Strong, with real bugs caught and documented rather than hidden — the
-  vancomycin mL/min->L/hr conversion error (Stage 8A) is preserved as a regression
-  test (`test_vancomycin_unit_conversion_regression`), and the digoxin Vd correction
-  (6.0 -> 7.0 L/kg) is documented in the watchlist as resolved
+## Clinical & Literature Verification
+- **Pair 2 (Gentamicin + Digoxin):** Updated to `Alkadi HO, Nooman MA, Raja'a YA. Pharm World Sci. 2004;26(2):107-109 (PMID 15085946)` and animal data `Staneva-Stoytcheva D et al. Eur J Drug Metab Pharmacokinet. 1992;17(1):1-8 (PMID 1323465)`. Observed serum digoxin increase (with rising SCr) separated from unestablished mechanism.
+- **Pair 3 (Phenytoin + Digoxin):** Updated to `Rameis H. Eur J Clin Pharmacol. 1985;29(1):49-53 (PMID 4054206)`. Observed reduced digoxin t1/2 and AUC0-48 with unchanged renal clearance and assumed unchanged absorption; unsupported CYP3A4/P-gp assertion removed.
+- **Pair 5 (Vancomycin + Digoxin):** Updated to `Tang NY et al. Pract Lab Med. 2022;30:e00277 (PMID 35541501)`. Classified via structured fields as `analytical_interference` (suspected free kappa light-chain interference on one PETINIA platform in one patient), not an interaction caused by co-administering the two drugs.
+- **Pairs 4 & 6 (Dated Negative Searches, `2026-11-22`):** Re-executed and dated across PubMed MeSH, PubMed Title/Abstract, and openFDA `drug_interactions` label endpoints (`0` primary interaction studies for `Gentamicin + Phenytoin` or `Vancomycin + Phenytoin`). Displayed as `NO INTERACTION FOUND IN DOCUMENTED SEARCH (NOT PROOF OF SAFETY)`. Independent clinical pharmacist sign-off remains `PENDING pharmacist review` across all 6 rows (structured adjudication packet prepared in `docs/pharmacist_adjudication_checklist.md`).
 
-## Data quality
-- STATUS: Strong. Every DDI/PK fact has a reference field; no fabricated data
-  anywhere (`data_sources_policy.md`)
-- OPEN: `validation_cases.csv` still has zero real rows (Stage 21, ongoing)
+## Mathematical & Boundary Repairs
+- **Obesity Vd Weight Corrections (`src/pk_engine.py`):** Drug-specific IBW/adjusted-weight corrections (`>30%` over Devine IBW) are implemented in `gentamicin_pk`, `vancomycin_pk`, `digoxin_pk`, and `phenytoin_pk`.
+- **Stage 21 Nonrenal Clearance Scaling Fix (`vancomycin_pk`):** Corrected flat `+0.05 mL/min` to `0.05 * weight_kg` using Case V2; locked by regression test.
+- **Digoxin Maintenance Dose Trace (`digoxin_maintenance_dose`):** Added explicit downstream formula `Dose = Css * CL * tau / F` connecting `digoxin_pk` to D1 (`287.5` vs `288 ug/day`) and D2 (`86.5` vs `87 ug/day`).
+- **Phenytoin Dimensional Guard (`phenytoin_pk`):** Removed the dimensionally invalid `css_target_mg_l >= vmax_mg_day` check (`mg/L` vs `mg/day`) and replaced it with a dimensionally consistent total-concentration window (`5.0-25.0 mg/L`) and positive `Vmax`/`Km` checks.
+- **Finite-Input & Population Scope Guards:** Added `_require_finite` in `renal.py` and `pk_engine.py` to block `NaN`/`inf`/booleans, and enforced adult age `>= 18` in Cockcroft-Gault and batch validation.
+- **Open Pharmacokinetic Gap:** Obese-patient gentamicin CrCl still uses Cockcroft-Gault with adjusted body weight (`renal.py`) rather than Salazar-Corcoran (`pk_engine.py` docstring).
 
-## ML correctness
-- STATUS: Honestly scoped rather than "correct" in a generalization sense —
-  deliberately not claiming predictive validity given n=6 with a singleton class
-  (Stage 11/12)
+## Validation Status (Development/Regression vs External Evaluation)
+- `data/validation_cases.csv` contains 4 Bauer 2nd ed. development/regression rows (`V1`, `V2`, `D1`, `D2`, covering 2 drugs, 2 renal states, 1 adult male 50 yr / 70 kg profile, 2 endpoints) plus 1 excluded out-of-scope case (`D3_EXCLUDED`, Bauer Ch.6 Example 4, pp. 316–317: 65-yr, 170-kg obese female, `SCr = 4.7 mg/dL`, `IBW = 57 kg`, Salazar-Corcoran `CrCl = 22 mL/min`, where primary-page inspection confirmed Bauer's `Vd = 288 L` is mathematically exact under the Jusko-Koup renal-dysfunction equation $V = [226 + 298 \cdot \text{CrCl}/(29.1+\text{CrCl})] \cdot (\text{IBW}/70) = 288.50\text{ L}$, NOT a textbook erratum; excluded because `digoxin_pk()` implements only the fixed normal-renal $7.0\text{ L/kg}$ scalar and `renal.py` does not implement Salazar-Corcoran).
+- `V2` served as a calibration/bug-discovery case and is retained as a regression check, not an unseen external test. Gentamicin and phenytoin have no published worked-case benchmark in this cohort.
+- Recalculated via `src/validation.py` (`recalculate_table1_from_source()`), aggregating unrounded row errors first:
+  - Archived display endpoints (`7.98/8`, `27.11/27`, `287.5/288`, `86.5/87`): MAPE `0.35143%` (`0.35%`), MaxAPE `0.57471%` (`0.57%`).
+  - Full-precision live outputs (`7.98068/8`, `27.11138/27`, `287.52365/288`, `86.52343/87`): MAPE `0.34179%` (`0.34%`), MaxAPE `0.54778%` (`0.55%`).
+- `data/adjudicated_synthetic_cases.csv` contains 16 frozen synthetic consistency cases verifying identical status headlines and flags across single-patient logic, PDF export, and batch CSV output.
 
-## Validation
-- STATUS: INCOMPLETE. This is the project's single biggest open item. Framework
-  and comparison code are ready (`validation_framework.md`, `src/validation.py`);
-  real cases are not yet collected
-
-## Explainability
-- STATUS: Strong. SHAP scoped honestly (Stage 13), equation-trace pattern applied
-  consistently across all deterministic modules (Stage 7)
-
-## Software quality
-- STATUS: Good for project scope. Type hints, docstrings with sources, explicit
-  ValueError over silent failures, tests mirror src/ structure (Stage 16-17)
-
-## Security/privacy
-- STATUS: Not formally audited — no real patient data is used anywhere in this
-  project (all data is either literature-derived or explicitly-flagged synthetic),
-  which substantially limits privacy risk by design rather than by added controls
-
-## Documentation
-- STATUS: Strong — 29 stages, each with a saved decision record and rationale,
-  not just a final summary
-
-## Reproducibility
-- STATUS: Good — README, requirements.txt, model card, fixed random seeds
-  (Stage 28)
-
-## Research quality
-- STATUS: Honest and appropriately scoped — novelty claim calibrated to what
-  the project actually supports (Stage 22), statistical methods matched to
-  sample size (Stage 24), no fabricated results anywhere
-
-## Publication readiness
-- STATUS: NOT YET READY. Blocked specifically on Stage 21 (real validation cases).
-  Once validation cases exist: Abstract, Results 6.1, and Discussion sections of
-  `manuscript_outline.md` can be completed, and the project would be genuinely
-  submission-ready for a scoped feasibility-study framing (per `paper_titles.md`)
-
-## Priority checklist before considering this "done"
-1. [ ] Collect and run real validation cases (Stage 21) — blocks Abstract/Results
-2. [ ] Source Salazar-Corcoran equation for obese gentamicin dosing (Stage 10 gap)
-3. [ ] Implement drug-specific Vd weight corrections in pk_engine.py (Stage 18 gap)
-4. [ ] Draft Abstract and Results once #1 is resolved
-5. [ ] Full read-through against every "Limitations" item to confirm nothing is
-   glossed over in the actual manuscript text
+## Reproducibility, Privacy & Authorship
+- **Dependencies:** Exact versions pinned in `requirements.txt`.
+- **Verification Receipt:** Run `pytest -v` and `python scripts/verify_release.py` to regenerate `VERIFICATION_REPORT.md`.
+- **Privacy:** Zero real patient records; all cohort files are synthetic (`synthetic=True`) or published textbook examples.
+- **Authorship & Status:** Unsubmitted research-in-progress educational software prototype. Placeholder faculty byline removed; roles and AI assistance are disclosed explicitly in the manuscript and README. Independent external evaluation against unseen cases and independent clinical adjudication remain open before any clinical claims.

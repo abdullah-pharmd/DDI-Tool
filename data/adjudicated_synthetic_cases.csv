@@ -1,0 +1,17 @@
+case_id,synthetic,age,sex,weight_kg,height_cm,scr_mg_dl,hepatic_impairment,drugs,nyha_class,expected_renal_category,expected_headline,expected_interaction_found,expected_monitoring_review,expected_dose_review,expected_caution,expected_insufficient,notes
+S01_MOD_PAIR_NORM_RENAL,True,50,male,70,175,0.97,No,Phenytoin;Digoxin,II,Normal,MONITORING REVIEW INDICATED,YES,YES,NO,NO,NO,Moderate pair with normal renal category must preserve monitoring review (never Standard Regimen Maintained)
+S02_HIGH_PAIR_NORM_RENAL,True,50,male,70,175,0.97,No,Vancomycin;Gentamicin,,Normal,MONITORING REVIEW INDICATED,YES,YES,NO,NO,NO,High pair with normal renal category triggers interaction+monitoring review (no renal dose review)
+S03_HIGH_PAIR_SEV_RENAL,True,50,male,70,175,3.5,No,Vancomycin;Gentamicin,,Severe,DOSE REVIEW INDICATED,YES,YES,YES,NO,NO,High pair with severe renal adds independent renal dose review; pair alert text unchanged
+S04_B90_NORMAL,True,50,male,70,175,0.97,No,Gentamicin;Phenytoin,,Normal,NO FLAGS FROM THE CHECKS PERFORMED,NO,NO,NO,NO,NO,Renal boundary just above 90 mL/min (90.2) with negative-search pair
+S05_B89_MILD,True,50,male,70,175,0.98,No,Gentamicin;Phenytoin,,Mild,NO FLAGS FROM THE CHECKS PERFORMED,NO,NO,NO,NO,NO,Renal boundary just below 90 mL/min (89.3) with negative-search pair
+S06_B60_MILD,True,50,male,70,175,1.45,No,Gentamicin;Phenytoin,,Mild,NO FLAGS FROM THE CHECKS PERFORMED,NO,NO,NO,NO,NO,Renal boundary just above 60 mL/min (60.3) with negative-search pair
+S07_B59_MODERATE,True,50,male,70,175,1.47,No,Gentamicin;Phenytoin,,Moderate,DOSE REVIEW INDICATED,NO,NO,YES,NO,NO,Renal boundary just below 60 mL/min (59.5) triggers renal dose review
+S08_B30_MODERATE,True,50,male,70,175,2.91,No,Gentamicin;Phenytoin,,Moderate,DOSE REVIEW INDICATED,NO,NO,YES,NO,NO,Renal boundary just above 30 mL/min (30.1) triggers renal dose review
+S09_B29_SEVERE,True,50,male,70,175,2.95,No,Gentamicin;Phenytoin,,Severe,DOSE REVIEW INDICATED,NO,NO,YES,NO,NO,Renal boundary just below 30 mL/min (29.7) triggers renal dose review
+S10_HEPATIC_CAUTION_ONLY,True,50,male,70,175,0.97,Yes,Gentamicin;Phenytoin,,Normal,CAUTION NOTED (NO DOSING CHANGE CALCULATED),NO,NO,NO,YES,NO,Hepatic caution alone must NOT set dose_review=True
+S11_HEPATIC_UNKNOWN,True,50,male,70,175,0.97,Unknown,Gentamicin;Phenytoin,,Normal,INSUFFICIENT INFORMATION,NO,NO,NO,NO,YES,Unknown hepatic status must be preserved as insufficient information (not mapped to No)
+S12_ASSAY_ARTIFACT,True,50,male,70,175,0.97,No,Vancomycin;Digoxin,I,Normal,MONITORING REVIEW INDICATED,NO,YES,NO,NO,NO,PETINIA assay/specimen limitation: interaction_found=NO and monitoring_review=YES
+S13_NEG_SEARCH_PAIR,True,50,male,70,175,0.97,No,Vancomycin;Phenytoin,,Normal,NO FLAGS FROM THE CHECKS PERFORMED,NO,NO,NO,NO,NO,Confirmed negative search with TDM listed under not assessed
+S14_SINGLE_DRUG_VANCO,True,50,male,70,175,0.97,No,Vancomycin,,Normal,NO FLAGS FROM THE CHECKS PERFORMED,NO,NO,NO,NO,NO,Single drug (no pair check) with TDM listed under not assessed
+S15_B50_ABOVE_HIGH,True,50,male,70,175,1.74,No,Vancomycin;Gentamicin,,Moderate,DOSE REVIEW INDICATED,YES,YES,YES,NO,NO,CrCl 50.3 mL/min with High pair (verifies no special CrCl<50 escalation threshold exists)
+S16_B50_BELOW_HIGH,True,50,male,70,175,1.76,No,Vancomycin;Gentamicin,,Moderate,DOSE REVIEW INDICATED,YES,YES,YES,NO,NO,CrCl 49.7 mL/min with High pair (identical drug-pair alert and flags as 50.3 mL/min)

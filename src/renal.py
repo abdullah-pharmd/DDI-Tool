@@ -8,8 +8,20 @@ Source: Cockcroft DW, Gault MH. Nephron. 1976;16(1):31-41. (CrCl equation)
 """
 
 
+import math
+
+
+def _require_finite(**values):
+    """Rejects NaN/inf/non-numeric inputs, which would otherwise slip past
+    ordinary <=/>= range checks (every comparison with NaN is False)."""
+    for name, v in values.items():
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v):
+            raise ValueError(f"{name} must be a finite number")
+
+
 def calculate_ibw(height_cm: float, sex: str) -> float:
     """Ideal body weight, Devine formula (kg)."""
+    _require_finite(height_cm=height_cm)
     if height_cm <= 0:
         raise ValueError("height_cm must be positive")
     if sex not in ("male", "female"):
@@ -26,8 +38,12 @@ def crcl_cockcroft_gault(age: int, actual_weight_kg: float, height_cm: float,
     Source: Cockcroft DW, Gault MH. Nephron. 1976;16(1):31-41.
     NOT valid in acute kidney injury (unstable SCr) or extremes of muscle mass.
     """
+    _require_finite(age=age, actual_weight_kg=actual_weight_kg, scr_mg_dl=scr_mg_dl)
     if age <= 0 or age > 130:
         raise ValueError("age must be a plausible positive value")
+    if age < 18:
+        raise ValueError("age < 18: Cockcroft-Gault and the adult PK equations "
+                         "used here are outside their supported population")
     if actual_weight_kg <= 0:
         raise ValueError("actual_weight_kg must be positive")
     if scr_mg_dl <= 0:
@@ -62,6 +78,7 @@ def renal_category(crcl_ml_min: float) -> dict:
     Used for Module 5's categorical dose-adjustment logic only -- each drug's own
     clearance equation (Module 4) uses continuous CrCl directly, not this category.
     """
+    _require_finite(crcl_ml_min=crcl_ml_min)
     if crcl_ml_min < 0:
         raise ValueError("crcl_ml_min cannot be negative")
     if crcl_ml_min >= 90:

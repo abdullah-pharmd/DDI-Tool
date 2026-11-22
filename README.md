@@ -1,99 +1,39 @@
 # ddi-pk-assistant
 
-A clinical decision support prototype connecting renal function estimation, classical pharmacokinetics, and drug-drug interaction surveillance.
+An educational four-drug pharmacokinetic calculation and drug-drug interaction lookup prototype built in Python and Streamlit.
 
-### Problem
-Hospital order-entry systems fire interaction warnings indiscriminately. Studies in tertiary hospitals (van der Sijs et al., 2006; Weingart et al., 2003) show that prescribers override 73% to 96% of these warnings. Most overrides happen because the software checks drug names in pairs without reading the patient's lab results or considering renal elimination.
+> **Status & Clinical Disclaimer:** Unsubmitted research-in-progress educational software prototype. It is **not clinically validated**, not approved as a medical device, and not valid for acute kidney injury (unstable serum creatinine), dialysis/CRRT, or patients under 18 years. No patient records exist in this repository. Independent clinical adjudication and external unseen-case evaluation remain open before any clinical claims.
 
-At the same time, precision dosing tools (Keizer et al., 2020; Gillaizeau et al., 2013) calculate pharmacokinetic doses for single medications in isolation, ignoring concurrent interacting drugs.
+### What this build actually does (Entry-Point Capabilities)
 
-This repository prototypes a workflow that runs both assessments together:
-1. Calculates patient-specific creatinine clearance using Cockcroft-Gault with weight adjustments (ideal body weight and adjusted body weight for obesity).
-2. Computes pharmacokinetic parameters for four narrow-therapeutic-index drugs (gentamicin, vancomycin, digoxin, phenytoin) using classical deterministic models from Larry Bauer's *Applied Clinical Pharmacokinetics*.
-3. Evaluates drug pairs against a curated interaction table, separating true pharmacokinetic interactions from assay artifacts (such as the vancomycin-digoxin PETINIA immunoassay cross-reaction).
-4. Flags dose-adjustment needs when renal impairment or severe interactions coexist.
+| Entry Point | Modules Invoked | Outputs Produced | Explicitly Not Assessed / Excluded |
+|---|---|---|---|
+| **Single Patient Workstation** (`app.py` Tab 1) | `renal.py`, `pk_engine.py`, `ddi_engine.py`, `dose_adjustment.py` | Adult Cockcroft-Gault CrCl & FDA renal category; drug-specific PK (`Gentamicin`, `Vancomycin`, `Digoxin` + maintenance dose, `Phenytoin`); 6-pair DDI lookup cards; independent `assess_regimen` / `summarize` flags | Live TDM (`tdm_status=None`), AKI/dialysis, patients < 18 yr, automatic interval extension, renal-based DDI alert escalation |
+| **PDF Audit Summary** (`src/report_generator.py`) | Formats single-patient dicts via `summarize()` and `ALERT_LABELS` | Timestamped educational/research audit PDF matching single-patient flags and cards | Does not recalculate inputs or run TDM |
+| **Batch Cohort Screening** (`app.py` Tab 2 / `src/batch_processing.py`) | `validate_csv_rows`, `group_by_patient`, `screen_patient` (`renal.py`, `ddi_engine.py`, `dose_adjustment.py`) | Per-patient renal category, 6-pair DDI flags, and `summarize()` status after strict pre-grouping validation | Drug-specific PK calculations (`pk_engine.py`) and TDM (both listed under `Not assessed` in every batch row) |
+| **TDM Helper** (`src/tdm.py`) | Standalone `interpret_tdm()` | Qualitative flag (`below range`, `within range`, `above range`, or `indeterminate`) with scope caveats | Not wired into UI or batch workflow in this build |
+| **ML Audit Illustration** (`src/ddi_ml.py`, `src/explainability.py`) | Standalone `train_audit_model()` | Illustrative training-set fit on the 6-row lookup table | Does NOT provide independent evidence of predictive performance |
 
-### Implemented models
+### Key Architectural Boundaries
+- **Independent Renal & DDI Flags:** `DDIEngine` (`src/ddi_engine.py`) takes `(drug_a, drug_b)` only and does not read renal function. `assess_regimen` (`src/dose_adjustment.py`) displays renal `dose_review`, DDI `interaction_found` / `monitoring_review`, `cautions` (hepatic flag is caution-only, never a calculated dose change), `insufficient_information`, and `not_assessed` side by side without escalating pair severity or extending dosing intervals automatically.
+- **Structured Alert Classification:** UI cards and PDF exports map directly from `alert_class` (`ALERT_HIGH`, `ALERT_MODERATE`, `ALERT_ANALYTICAL`, `ALERT_NEGATIVE_SEARCH`, `ALERT_NOT_IN_KB`), keeping the `Vancomycin + Digoxin` PETINIA immunoassay artifact (`Tang et al. 2022, PMID 35541501`) separate from pharmacologic interactions and distinguishing documented negative searches from unassessed pairs.
+- **Input & Dimensional Guards:** Non-finite (`NaN`, `inf`), boolean, and paediatric (`age < 18`) inputs are rejected before grouping or calculation. `phenytoin_pk` validates finite concentrations within a tool-scope total-concentration window (`5.0-25.0 mg/L`) rather than comparing concentration (`mg/L`) to `Vmax` (`mg/day`).
 
-#### Renal clearance
-- Equation: Cockcroft-Gault (1976)
-- Weight protocols: Devine ideal body weight (IBW), and adjusted body weight (0.4 factor) for patients exceeding 120% of IBW.
-- Renal staging: FDA guidance thresholds (normal >=90, mild 60-89, moderate 30-59, severe 15-29, end-stage renal disease <15 mL/min).
+### Verification & Regression Suite
+- **Bauer 2nd ed. Development/Regression Cases (`data/validation_cases.csv`):** 4 included adult male cases (`V1`, `V2`, `D1`, `D2`) covering `Vancomycin` (`t1/2`: `7.98` vs `8` hr; `27.11` vs `27` hr) and `Digoxin` (`maintenance dose`: `287.5` vs `288` ug/day; `86.5` vs `87` ug/day). Aggregating unrounded errors via `src/validation.py` yields MAPE `0.35%` (`0.35143%`) and MaxAPE `0.57%` (`0.57471%`) on displayed endpoints (`0.34%` / `0.55%` on full-precision floats). Case `V2` exposed the Stage 21 nonrenal clearance weight-scaling defect (`0.05 * weight_kg` vs flat `+0.05 mL/min`) during development and is retained as a regression check. One obese renal-impaired digoxin example (`D3_EXCLUDED`, Bauer Ch.6 Ex.4 pp. 316–317: 65-yr, 170-kg female, `SCr 4.7 mg/dL`, `Vd = 288 L`) was verified against the primary textbook pages: Bauer's `288 L` is exact under the Jusko-Koup renal-dysfunction volume formula $V = [226 + 298 \cdot \text{CrCl}/(29.1+\text{CrCl})] \cdot (\text{IBW}/70) = 288.5\text{ L}$ with Salazar-Corcoran `CrCl = 22 mL/min` and `IBW = 57 kg` (not a textbook erratum), and is excluded as outside the prototype's fixed-$7.0\text{ L/kg}$ / Cockcroft-Gault model scope.
+- **Adjudicated Synthetic Consistency Matrix (`data/adjudicated_synthetic_cases.csv`):** 16 synthetic cases testing boundary renal thresholds (`90/60/50/30 mL/min`), Moderate and High DDI pairs, assay interference, hepatic caution alone, unknown hepatic status, and cross-path agreement across single-patient logic, PDF output, and batch CSV screening.
 
-#### Pharmacokinetics
-- Gentamicin: Single-compartment intravenous infusion model. Elimination rate ke = 0.00293 * CrCl + 0.014 hr^-1, Vd = 0.26 L/kg.
-- Vancomycin: Matzke clearance model adapted to patient weight. Clearance = 0.695 * CrCl + 0.05 * weight (kg). Vd = 0.7 L/kg (uses IBW if patient exceeds 130% of IBW). Daily dose targets an AUC24 of 500 mg*hr/L.
-- Digoxin: Jusko-Koup model. Total clearance = 1.303 * CrCl + nonrenal clearance, where nonrenal clearance depends on heart failure severity (NYHA class I-IV).
-- Phenytoin: Capacity-limited Michaelis-Menten kinetics (Richens and Dunlop, 1975) with Vmax = 7 mg/kg/day and Km = 4 mg/L. Includes Winter-Tozer albumin correction for hypoalbuminemia.
-
-#### Drug interaction knowledge base
-A focused reference table covering narrow-therapeutic-index drugs. Each pair includes mechanism, clinical effect, severity tier, actionable recommendation, and primary literature citation. Notably, vancomycin plus digoxin is documented as an analytical cross-reactivity artifact on PETINIA assays rather than in vivo toxicity.
-
-### Project layout
-```
-ddi-pk-assistant/
-|-- app.py                     # Streamlit web interface
-|-- requirements.txt           # Python dependencies
-|-- src/
-|   |-- renal.py               # Cockcroft-Gault and body weight calculations
-|   |-- pk_engine.py           # Pharmacokinetic equations for all 4 drugs
-|   |-- ddi_engine.py          # Pairwise interaction lookup
-|   |-- dose_adjustment.py     # Decision logic combining renal and DDI outputs
-|   |-- tdm.py                 # Reference ranges and concentration checks
-|   |-- batch_processing.py    # Multi-patient CSV handling
-|   |-- report_generator.py    # PDF report generation
-|   `-- validation.py          # Input ranges and clinical sanity checks
-|-- data/
-|   |-- ddi_knowledge_base.csv # Sourced interaction pairs
-|   `-- sample_batch.csv       # Test cohort for batch screening
-|-- tests/
-|   |-- test_renal.py          # Cockcroft-Gault edge cases and weight logic
-|   |-- test_pk_engine.py      # Numerical checks against textbook worked cases
-|   `-- test_ddi_engine.py     # Interaction queries and bidirectional lookup
-`-- docs/                      # Clinical background and design notes
-```
-
-### Verification and tests
-All formulas are tested against worked clinical cases in Bauer's *Applied Clinical Pharmacokinetics* (2nd edition, McGraw-Hill, 2008). 
-
-Run the test suite:
-```bash
-pytest tests/ -v
-```
-All 26 unit tests run deterministically in under half a second.
-
-### Running the application locally
-
-1. Clone this repository:
-```bash
-git clone https://github.com/abdullah-pharmd/ddi-pk-assistant.git
-cd ddi-pk-assistant
-```
-
-2. Set up a virtual environment:
+### Reproducible Setup & Verification
 ```bash
 python -m venv .venv
-# On Windows:
 .venv\Scripts\activate
-# On Linux or macOS:
-source .venv/bin/activate
-```
-
-3. Install dependencies:
-```bash
 pip install -r requirements.txt
-```
-
-4. Start Streamlit:
-```bash
+pytest -v
+python scripts/verify_release.py
 streamlit run app.py
 ```
 
-The application runs two modes:
-- Single patient: Enter demographics, renal laboratory values, and medications to inspect step-by-step calculations and download a PDF summary.
-- Batch processing: Upload a multi-row CSV to screen hospital ward lists for renal dose adjustments and interactions simultaneously.
-
-### Clinical disclaimer
-This repository is an academic research prototype. It is not approved as a medical device and should never be used as the sole basis for clinical treatment, diagnosis, or prescribing. All calculations and recommendations must be reviewed by licensed clinical pharmacists and attending physicians under institutional hospital protocols.
-
-
+### Authorship, Roles & AI Assistance
+- **Author:** Muhammad Abdullah Khan (Department of Pharmacy Practice, GCUF, Faisalabad, Pakistan) — conceived the prototype, implemented the modules, curated primary citations, audited defects, and prepared the verification suite and manuscript.
+- **Independent Verification Status:** Unit tests and synthetic consistency checks pass locally; independent clinical pharmacist adjudication of the 6-pair table (`reviewer_signoff = PENDING pharmacist review`) and external evaluation on unseen clinical cases remain open.
+- **AI Assistance:** AI coding/editing tools were used to assist code refactoring, test generation, and manuscript structural cleanup under author review and verification of all equations, primary PubMed records, and executed test outputs.

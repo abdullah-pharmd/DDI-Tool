@@ -16,7 +16,10 @@ def format_equation_trace(result: dict, calculation_name: str) -> dict:
     NOT a new calculation -- it only reformats an existing result for display.
     """
     reference = result.get("reference", "No reference recorded")
-    inputs_and_results = {k: v for k, v in result.items() if k != "reference"}
+    inputs_and_results = {
+        k: v for k, v in result.items()
+        if k != "reference" and not k.endswith("_unrounded")
+    }
     return {
         "calculation_name": calculation_name,
         "values": inputs_and_results,

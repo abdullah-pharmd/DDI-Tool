@@ -1,12 +1,13 @@
 """
-Module 3 (ML side) — DDI Severity Audit Classifier
-Per docs/ml_component_design.md: this is an EXPLAINABILITY/AUDIT tool on the
-6-row DDI knowledge base, NOT a validated predictor. No train/test split, no
-cross-validation performance claim (singleton "High" class makes both
-structurally uninformative -- see docs/model_validation_design.md).
+Module 3 (ML side) — DDI Severity Audit Classifier (Illustrative Only)
+Per docs/ml_component_design.md: this is an ILLUSTRATIVE EXPLAINABILITY/AUDIT
+tool fitted on the entire 6-row DDI knowledge base, NOT a validated predictor.
+Its training-set fit and SHAP plots do NOT provide independent evidence of
+predictive performance. No train/test split or cross-validation performance claim
+is made (singleton "High" class makes both structurally uninformative).
 Every function here must be used with the UI wording rules from
 docs/shap_explainability_design.md -- literature severity is always primary/
-headline; this module's output is always a supplementary audit panel.
+headline; this module's output is always a supplementary audit illustration.
 """
 import csv
 import numpy as np
@@ -79,7 +80,8 @@ def audit_fit_summary(model, X, labels) -> dict:
     return {
         "classes": classes,
         "confusion_matrix": cm.tolist(),
-        "note": "TRAINING-SET FIT ONLY. Not a test-set or cross-validated result. "
-                "See docs/model_validation_design.md for why cross-validation is "
-                "structurally uninformative on this dataset (singleton High class).",
+        "note": "ILLUSTRATIVE TRAINING-SET FIT ON 6-ROW LOOKUP ONLY. Not a "
+                "test-set or cross-validated result, and does not provide "
+                "independent evidence of predictive performance. See "
+                "docs/model_validation_design.md (singleton High class).",
     }

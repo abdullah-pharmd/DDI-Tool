@@ -10,7 +10,11 @@ used directly. An earlier draft of this file applied the corrected formula
 unconditionally, which broke the Stage 21 validation cases (patient was not obese,
 so actual weight was the correct basis) -- caught and fixed before this was shipped.
 """
-from renal import calculate_ibw
+from renal import calculate_ibw, _require_finite
+
+# Tool-scope window for a TOTAL phenytoin steady-state target (mg/L). This is a
+# software limit matching the UI input range, not a clinical recommendation.
+PHENYTOIN_SUPPORTED_CSS_MG_L = (5.0, 25.0)
 
 
 def _weight_basis(actual_weight_kg: float, ibw: float, obese_formula) -> float:
@@ -31,8 +35,9 @@ def gentamicin_pk(weight_kg: float, crcl_ml_min: float, height_cm: float, sex: s
     KNOWN GAP: obese-patient CrCl should use Salazar-Corcoran equation instead of
     Cockcroft-Gault -- not yet sourced.
     """
-    if weight_kg <= 0 or crcl_ml_min < 0:
-        raise ValueError("weight_kg must be positive and crcl_ml_min non-negative")
+    _require_finite(weight_kg=weight_kg, crcl_ml_min=crcl_ml_min, cpeak_target=cpeak_target)
+    if weight_kg <= 0 or crcl_ml_min < 0 or cpeak_target <= 0:
+        raise ValueError("weight_kg and cpeak_target must be positive, and crcl_ml_min non-negative")
     ibw = calculate_ibw(height_cm, sex)
     weight_for_vd = _weight_basis(weight_kg, ibw, lambda w, i: i + 0.4 * (w - i))
     vd_l = 0.26 * weight_for_vd
@@ -70,8 +75,9 @@ def vancomycin_pk(weight_kg: float, crcl_ml_min: float, height_cm: float, sex: s
     NOT valid for hemodialysis patients, rapidly changing renal function, or
     >30% over IBW (Matzke Nomogram not valid there per source).
     """
-    if weight_kg <= 0 or crcl_ml_min < 0:
-        raise ValueError("weight_kg must be positive and crcl_ml_min non-negative")
+    _require_finite(weight_kg=weight_kg, crcl_ml_min=crcl_ml_min, auc24_target=auc24_target)
+    if weight_kg <= 0 or crcl_ml_min < 0 or auc24_target <= 0:
+        raise ValueError("weight_kg and auc24_target must be positive, and crcl_ml_min non-negative")
     ibw = calculate_ibw(height_cm, sex)
     weight_for_vd = _weight_basis(weight_kg, ibw, lambda w, i: i)  # obese -> IBW
     vd_l = 0.7 * weight_for_vd
@@ -84,6 +90,7 @@ def vancomycin_pk(weight_kg: float, crcl_ml_min: float, height_cm: float, sex: s
         "vd_l": round(vd_l, 2), "weight_used_for_vd_kg": round(weight_for_vd, 1),
         "cl_ml_min": round(cl_ml_min, 2), "cl_l_hr": round(cl_l_hr, 2),
         "k_per_hr": round(k, 4), "half_life_hr": round(half_life_hr, 2),
+        "half_life_hr_unrounded": half_life_hr,
         "daily_dose_mg": round(daily_dose_mg, 0),
         "reference": "Bauer LA, Applied Clinical Pharmacokinetics, 2nd ed., "
                       "Ch.5, Fig.5-2 p.212, p.215; Vd obesity basis: p.212-213,216,229; "
@@ -103,6 +110,7 @@ def digoxin_pk(weight_kg: float, crcl_ml_min: float, nyha_class: str,
     not 7*73=511L IBW).
     NOT valid for rapidly changing renal function.
     """
+    _require_finite(weight_kg=weight_kg, crcl_ml_min=crcl_ml_min)
     if weight_kg <= 0 or crcl_ml_min < 0:
         raise ValueError("weight_kg must be positive and crcl_ml_min non-negative")
     if nyha_class not in ("I", "II", "III", "IV"):
@@ -121,9 +129,31 @@ def digoxin_pk(weight_kg: float, crcl_ml_min: float, nyha_class: str,
         "cl_ml_min": round(cl_ml_min, 2), "cl_l_hr": round(cl_l_hr, 3),
         "k_per_hr": round(k, 5), "half_life_hr": round(half_life_hr, 1),
         "cl_nr_used": cl_nr_ml_min,
+        "cl_ml_min_unrounded": cl_ml_min,
         "reference": "Bauer LA, Applied Clinical Pharmacokinetics, 2nd ed., "
                       "Ch.6, p.305/312 (Jusko-Koup, raw CrCl); Vd obesity basis: p.312-313,318",
     }
+
+
+def digoxin_maintenance_dose(cl_ml_min: float, css_target_ng_ml: float,
+                             bioavailability: float, tau_hr: float = 24.0) -> dict:
+    """
+    Maintenance dose = Css x CL x tau / F  (Bauer Ch.6 worked examples).
+    Units: Css ng/mL == ug/L; CL mL/min -> L/h (x 60/1000); result in ug per tau.
+    This is the downstream formula behind validation cases D1/D2 (288 and
+    87 ug/day reported). Pass the UNROUNDED clearance for validation.
+    """
+    _require_finite(cl_ml_min=cl_ml_min, css_target_ng_ml=css_target_ng_ml,
+                    bioavailability=bioavailability, tau_hr=tau_hr)
+    if cl_ml_min <= 0 or css_target_ng_ml <= 0 or tau_hr <= 0:
+        raise ValueError("cl_ml_min, css_target_ng_ml and tau_hr must be positive")
+    if not (0 < bioavailability <= 1):
+        raise ValueError("bioavailability must be in (0, 1]")
+    cl_l_hr = cl_ml_min * 60 / 1000
+    dose_ug = css_target_ng_ml * cl_l_hr * tau_hr / bioavailability
+    return {"dose_ug_per_tau": dose_ug, "tau_hr": tau_hr,
+            "equation": "Dose = Css x CL x tau / F",
+            "reference": "Bauer LA, Applied Clinical Pharmacokinetics, 2nd ed., Ch.6"}
 
 
 def phenytoin_pk(weight_kg: float, css_target_mg_l: float, height_cm: float, sex: str,
@@ -140,20 +170,31 @@ def phenytoin_pk(weight_kg: float, css_target_mg_l: float, height_cm: float, sex
     NOT valid: non-steady-state levels, or total-level interpretation without
     winter_tozer_correction() when albumin <3.5 g/dL or CrCl <25 mL/min.
     Vmax/Km are POPULATION STARTING ESTIMATES.
+    Input checks are dimensionally consistent: the target concentration (mg/L)
+    is compared only with concentrations, Vmax and Km must be positive, and the
+    supported target window is a tool-scope limit on TOTAL concentration.
+    (An earlier version compared Css in mg/L with Vmax in mg/day -- quantities
+    that cannot be ordered. That check was removed.)
     """
-    if weight_kg <= 0 or css_target_mg_l <= 0:
-        raise ValueError("weight_kg and css_target_mg_l must be positive")
+    _require_finite(weight_kg=weight_kg, css_target_mg_l=css_target_mg_l,
+                    vmax_mg_kg_day=vmax_mg_kg_day, km_mg_l=km_mg_l)
+    if weight_kg <= 0 or vmax_mg_kg_day <= 0 or km_mg_l <= 0:
+        raise ValueError("weight_kg, vmax_mg_kg_day and km_mg_l must be positive")
+    lo, hi = PHENYTOIN_SUPPORTED_CSS_MG_L
+    if not (lo <= css_target_mg_l <= hi):
+        raise ValueError(f"css_target_mg_l must be within the tool's supported total-"
+                         f"concentration window {lo}-{hi} mg/L")
     ibw = calculate_ibw(height_cm, sex)
     weight_for_vmax = _weight_basis(weight_kg, ibw, lambda w, i: i)
     vmax_mg_day = vmax_mg_kg_day * weight_for_vmax
-    if css_target_mg_l >= vmax_mg_day:
-        raise ValueError("Target concentration implies dose >= Vmax — not achievable")
     dose_mg_day = (vmax_mg_day * css_target_mg_l) / (km_mg_l + css_target_mg_l)
+    assert dose_mg_day < vmax_mg_day  # holds for any finite Css > 0 (MM saturation)
 
     weight_for_vd = _weight_basis(weight_kg, ibw, lambda w, i: i + 1.33 * (w - i))
     vd_l = 0.7 * weight_for_vd
     return {
         "vmax_mg_day": round(vmax_mg_day, 0), "km_mg_l": km_mg_l,
+        "css_target_mg_l": css_target_mg_l,
         "dose_mg_day": round(dose_mg_day, 1), "vd_l": round(vd_l, 1),
         "weight_used_kg": round(weight_for_vmax, 1),
         "reference": "Richens & Dunlop 1975 (equation); "
@@ -169,6 +210,7 @@ def winter_tozer_correction(c_measured_mg_l: float, albumin_g_dl: float,
     Source: Bauer p.489; Winter p.406 Eq.14.2 (normal renal) / p.406-407 Eq.14.3 (CrCl<10).
     Use when albumin < 3.5 g/dL or CrCl < 25 mL/min.
     """
+    _require_finite(c_measured_mg_l=c_measured_mg_l, albumin_g_dl=albumin_g_dl)
     if c_measured_mg_l <= 0 or albumin_g_dl <= 0:
         raise ValueError("c_measured_mg_l and albumin_g_dl must be positive")
     if severe_renal_impairment:
