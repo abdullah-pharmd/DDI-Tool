@@ -30,6 +30,10 @@
   - Archived display endpoints (`7.98/8`, `27.11/27`, `287.5/288`, `86.5/87`): MAPE `0.35143%` (`0.35%`), MaxAPE `0.57471%` (`0.57%`).
   - Full-precision live outputs (`7.98068/8`, `27.11138/27`, `287.52365/288`, `86.52343/87`): MAPE `0.34179%` (`0.34%`), MaxAPE `0.54778%` (`0.55%`).
 - `data/adjudicated_synthetic_cases.csv` contains 16 frozen synthetic consistency cases verifying identical status headlines and flags across single-patient logic, PDF export, and batch CSV output.
+- **Post-Freeze Held-Out 4-Drug & Comparator Evaluation (`HELDOUT_BENCHMARK_REPORT.md`):**
+  - Executed after freezing `src/` at `v0.2.0-reviewer-repair-2026-11` (`commit dd22acb`, verified via `11/11` SHA-256 digests in `scripts/evaluate_heldout_benchmark.py`).
+  - **14 Unseen Bauer 2nd ed. Cases Across All 4 Drugs (`data/heldout_pk_cases.csv`):** `8/8` in-scope unseen endpoints across Gentamicin (`4/4`), Vancomycin (`1/1`), Digoxin (`1/1`), and Phenytoin (`2/2`) pass the prespecified `<= 2.0%` tolerance (MAPE `0.60%` display / `0.5862%` unrounded; MaxAPE `1.50%` display / `1.2680%` unrounded). Five boundary cases transparently quantify where the frozen parameterization diverges on unseen covariate/formulation conditions (`+9.00%` and `+15.21%` from `1.0-1.3 x IBW` Cockcroft-Gault weight selection; `+9.71%` from obese Cockcroft-Gault ABW vs Salazar-Corcoran CrCl; `-7.99%` from phenytoin sodium salt factor $S = 0.92$; `+20.78%` from Winter-Tozer $37^\circ\text{C}$ vs $25^\circ\text{C}$ coefficient), and one paediatric case (`age = 10`, Bauer Ch.10 Ex.2) verifies the `age < 18` abstention gate.
+  - **20-Scenario Comparator Benchmark (`data/heldout_comparator_scenarios.csv`):** Compares Frozen Prototype `v0.2.0` (`20/20`, `100%`) against Pre-Repair Build `5703a7c` (`3/20`, `15%`), Static Pair-Only DDI Checker (`4/20`, `20%`), and Single-Drug PK-Only Calculator (`3/20`, `15%`) across 5 measurable decision tasks.
 
 ## Reproducibility, Privacy & Authorship
 - **Dependencies:** Exact versions pinned in `requirements.txt`.

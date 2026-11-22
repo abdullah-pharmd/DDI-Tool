@@ -1,10 +1,10 @@
 # Verification Report — Four-Drug PK & DDI Decision-Support Prototype
 
-- **Generated (UTC):** 2026-11-22 02:45:44 UTC
-- **Generated (Local):** 2026-11-22 07:45:44
-- **Git Branch / Base Commit:** `reviewer-repair-2026-11` (`aa37314`)
+- **Generated (UTC):** 2026-11-22 03:07:30 UTC
+- **Generated (Local):** 2026-11-22 08:07:30
+- **Git Branch / Base Commit:** `reviewer-repair-2026-11` (`1c308fb`)
 - **Python / Platform:** 3.12.10 (Windows-10-10.0.19045-SP0)
-- **Automated Test Suite (`pytest -v`):** `============================= 61 passed in 2.13s ==============================`
+- **Automated Test Suite (`pytest -v`):** `============================= 65 passed in 2.13s ==============================`
 
 ## 1. Table 1 Recalculation From Source (`src/validation.py`)
 

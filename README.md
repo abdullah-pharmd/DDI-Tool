@@ -22,6 +22,12 @@ An educational four-drug pharmacokinetic calculation and drug-drug interaction l
 ### Verification & Regression Suite
 - **Bauer 2nd ed. Development/Regression Cases (`data/validation_cases.csv`):** 4 included adult male cases (`V1`, `V2`, `D1`, `D2`) covering `Vancomycin` (`t1/2`: `7.98` vs `8` hr; `27.11` vs `27` hr) and `Digoxin` (`maintenance dose`: `287.5` vs `288` ug/day; `86.5` vs `87` ug/day). Aggregating unrounded errors via `src/validation.py` yields MAPE `0.35%` (`0.35143%`) and MaxAPE `0.57%` (`0.57471%`) on displayed endpoints (`0.34%` / `0.55%` on full-precision floats). Case `V2` exposed the Stage 21 nonrenal clearance weight-scaling defect (`0.05 * weight_kg` vs flat `+0.05 mL/min`) during development and is retained as a regression check. One obese renal-impaired digoxin example (`D3_EXCLUDED`, Bauer Ch.6 Ex.4 pp. 316–317: 65-yr, 170-kg female, `SCr 4.7 mg/dL`, `Vd = 288 L`) was verified against the primary textbook pages: Bauer's `288 L` is exact under the Jusko-Koup renal-dysfunction volume formula $V = [226 + 298 \cdot \text{CrCl}/(29.1+\text{CrCl})] \cdot (\text{IBW}/70) = 288.5\text{ L}$ with Salazar-Corcoran `CrCl = 22 mL/min` and `IBW = 57 kg` (not a textbook erratum), and is excluded as outside the prototype's fixed-$7.0\text{ L/kg}$ / Cockcroft-Gault model scope.
 - **Adjudicated Synthetic Consistency Matrix (`data/adjudicated_synthetic_cases.csv`):** 16 synthetic cases testing boundary renal thresholds (`90/60/50/30 mL/min`), Moderate and High DDI pairs, assay interference, hepatic caution alone, unknown hepatic status, and cross-path agreement across single-patient logic, PDF output, and batch CSV screening.
+- **Post-Freeze Held-Out 4-Drug Benchmark & Comparator Study (`data/heldout_pk_cases.csv`, `data/heldout_comparator_scenarios.csv`, `scripts/evaluate_heldout_benchmark.py`, `HELDOUT_BENCHMARK_REPORT.md`):**
+  - **Cryptographic Code Freeze Lock:** Verifies all `11/11` files in `src/` match the SHA-256 digests of frozen release `v0.2.0-reviewer-repair-2026-11` (`commit dd22acb`) with zero post-freeze edits to calculation modules.
+  - **14 Unseen Bauer (2nd ed.) Worked Cases Across All 4 Drugs:**
+    - *In-scope equations (`8/8` passing prespecified `<= 2.0%` tolerance):* Gentamicin (`4/4`, MAPE `1.04%`), Vancomycin (`1/1`, APE `0.15%`), Digoxin (`1/1`, APE `0.32%`), Phenytoin (`2/2`, MAPE `0.09%`); combined in-scope MAPE = `0.60%` (`0.5862%` unrounded), MaxAPE = `1.50%` (`1.2680%` unrounded).
+    - *5 Newly Exposed Covariate/Formulation Boundary Divergences (`> 2.0%`) + 1 Verified Paediatric Abstention Gate:* Overweight-non-obese (`1.0-1.3 x IBW`) Cockcroft-Gault IBW vs TBW weight rule (`+9.00%` and `+15.21%` gentamicin $t_{1/2}$ in Ch.4 Ex.4-5), obese Cockcroft-Gault ABW vs Salazar-Corcoran CrCl (`+9.71%` vancomycin $t_{1/2}$ in Ch.5 Ex.3), phenytoin sodium salt factor $S = 0.92$ vs free acid $S = 1.0$ (`-7.99%` dose in Ch.10 Ex.1/3), Winter-Tozer $37^\circ\text{C}$ vs $25^\circ\text{C}$ coefficient (`+20.78%` in Ch.10 p.490 Ex.1), and paediatric rejection (`age = 10` blocked in Ch.10 Ex.2/4).
+  - **20-Scenario Multi-Domain Comparator Benchmark:** Frozen Repaired Prototype (`20/20`, `100%`) vs Pre-Repair Prototype `5703a7c` (`3/20`, `15%`), Static Pair-Only DDI Checker (`4/20`, `20%`), and Single-Drug PK-Only Calculator (`3/20`, `15%`).
 
 ### Reproducible Setup & Verification
 ```bash
@@ -30,6 +36,7 @@ python -m venv .venv
 pip install -r requirements.txt
 pytest -v
 python scripts/verify_release.py
+python scripts/evaluate_heldout_benchmark.py
 streamlit run app.py
 ```
 
